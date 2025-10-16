@@ -21,8 +21,13 @@ def health():
     return "OK"
 
 def run_web_server():
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    """Запускает Flask веб-сервер"""
+    try:
+        port = int(os.environ.get('PORT', 5000))
+        print(f"🚀 Starting Flask on port {port}...")
+        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    except Exception as e:
+        print(f"❌ Flask error: {e}")
 
 # Настройка логирования
 logging.basicConfig(
@@ -500,7 +505,17 @@ async def my_id(update, context):
 def main():
     """Основная функция запуска бота"""
     try:
-        # Создаем приложение
+        # ЗАПУСКАЕМ FLASK ПЕРВЫМ ДЕЛОМ
+        print("🌐 Starting Flask web server...")
+        web_thread = threading.Thread(target=run_web_server, daemon=True)
+        web_thread.start()
+        
+        # Ждем немного чтобы Flask успел запуститься
+        import time
+        time.sleep(3)
+        print("✅ Flask web server started")
+
+        # Создаем приложение Telegram
         application = (
             Application.builder()
             .token(Config.BOT_TOKEN)
@@ -530,11 +545,7 @@ def main():
         # Добавляем обработчик ошибок
         application.add_error_handler(error_handler)
 
-        web_thread = threading.Thread(target=run_web_server, daemon=True)
-        web_thread.start()
-
-        print("🌐 Web server started on port 5000")
-        print("🤖 Starting bot with conflict protection...")
+        print("🤖 Starting Telegram bot...")
         
         # Запускаем с защитой от конфликтов
         application.run_polling(
@@ -559,4 +570,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
