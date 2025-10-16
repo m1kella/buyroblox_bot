@@ -1,9 +1,9 @@
 import logging
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 from config import Config
 from database import Database
-from handlers import show_catalog, button_handler
+from handlers import show_catalog, button_handler, show_inventory
 from admin_handlers import admin_panel, admin_button_handler
 from flask import Flask
 import threading
@@ -40,6 +40,22 @@ logger = logging.getLogger(__name__)
 logging.getLogger('httpx').setLevel(logging.WARNING)
 logging.getLogger('httpcore').setLevel(logging.WARNING)
 
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ошибки бота"""
+    logger.error(f"Ошибка: {context.error}", exc_info=context.error)
+    
+    # Можно отправить сообщение админу
+    try:
+        from config import Config
+        if Config.ADMIN_ID_INT:
+            error_text = f"❌ Ошибка бота:\n{context.error}"
+            await context.bot.send_message(
+                chat_id=Config.ADMIN_ID_INT,
+                text=error_text
+            )
+    except Exception as e:
+        logger.error(f"Ошибка при отправке уведомления админу: {e}")
+
 db = Database()
 
 # ---------------------КОМАНДЫ----------------------- #
@@ -58,7 +74,8 @@ f"Добро пожаловать в магазин скинов MM2!\n\n"
 f"💰 Твой стартовый баланс: 0 ₽\n"
 f"🎮 Теперь ты можешь покупать крутые скины!\n\n"
 f"Напиши /catalog, чтобы посмотреть каталог:\n"
-f"Чтобы ознакомиться со всеми командами, напиши /help или воспользуйтесь меню"
+f"Чтобы ознакомиться со всеми командами, напиши /help или воспользуйтесь меню\n\n"
+f"🕘 Рабочее время обработки заказов: 09:00 - 21:00 МСК"
     )
 
 async def help_command(update, context):
@@ -90,6 +107,7 @@ async def help_command(update, context):
 
 Как забрать купленные товары:
 
+• Заказы обрабатываются с 09:00 до 21:00 МСК
 • Пишите администратору, какие товары нужно вывести -> @m1kellaa
 • Все товары выдаются путем трейда внутри MM2
 • Условия для успешного трейда: 10 LVL в MM2, аккаунт Roblox 13+
@@ -252,34 +270,6 @@ async def skin_info_command(update, context):
     except Exception as e:
         logger.error(f"Ошибка при показе информации о скине: {e}")
         await update.message.reply_text("❌ Ошибка при загрузке информации")
-
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает ошибки бота"""
-    try:
-        # Логируем ошибку
-        logger.error("Exception while handling an update:", exc_info=context.error)
-        
-        # Детальная информация об ошибке
-        error_details = {
-            "error": str(context.error),
-            "update": update.to_dict() if update else None,
-            "user_data": context.user_data,
-            "chat_data": context.chat_data
-        }
-        
-        logger.error(f"Error details: {error_details}")
-        
-        # Уведомление пользователю
-        if update and update.effective_message:
-            try:
-                await update.effective_message.reply_text(
-                    "❌ Произошла ошибка. Мы уже работаем над исправлением!"
-                )
-            except:
-                pass  # Игнорируем ошибки отправки сообщений
-                
-    except Exception as e:
-        logger.error(f"Error in error handler: {e}")
 
 # -----------------------АДМИН-ОБРАБОТЧИКИ------------------------- #
 
@@ -549,4 +539,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
