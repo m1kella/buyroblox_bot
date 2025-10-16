@@ -530,6 +530,10 @@ def main():
         # Добавляем обработчик ошибок
         application.add_error_handler(error_handler)
 
+        web_thread = threading.Thread(target=run_web_server, daemon=True)
+        web_thread.start()
+
+        print("🌐 Web server started on port 5000")
         print("🤖 Starting bot with conflict protection...")
         
         # Запускаем с защитой от конфликтов
@@ -555,3 +559,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
