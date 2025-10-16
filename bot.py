@@ -25,7 +25,17 @@ def run_web_server():
     try:
         port = int(os.environ.get('PORT', 5000))
         print(f"🚀 Starting Flask on port {port}...")
-        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+        
+        # Используем другой порт если основной занят
+        try:
+            app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+        except OSError as e:
+            if "Address already in use" in str(e):
+                print(f"⚠️ Port {port} is busy, trying port {port + 1}")
+                app.run(host='0.0.0.0', port=port + 1, debug=False, use_reloader=False)
+            else:
+                raise e
+                
     except Exception as e:
         print(f"❌ Flask error: {e}")
 
@@ -500,6 +510,45 @@ async def my_id(update, context):
         parse_mode='Markdown'
     )
 
+async def delete_skin_command(update, context):
+    """Команда для удаления скина (только для админа)"""
+    from admin_handlers import is_admin
+    from database import Database
+    
+    user_id = update.effective_user.id
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Нет доступа")
+        return
+        
+    if not context.args:
+        await update.message.reply_text(
+            "Использование: /delete_skin <ID_скина>\n\n"
+            "Чтобы узнать ID скина, используй /admin → Управление скинами"
+        )
+        return
+        
+    try:
+        skin_id = int(context.args[0])
+        db = Database()
+        skin = db.get_skin_by_id(skin_id)
+        
+        if not skin:
+            await update.message.reply_text("❌ Скин с таким ID не найден")
+            return
+            
+        with db.get_connection() as conn:
+            conn.execute('DELETE FROM skins WHERE skin_id = ?', (skin_id,))
+            conn.commit()
+            
+        await update.message.reply_text(
+            f"✅ Скин '{skin['name']}' успешно удален!"
+        )
+        
+    except ValueError:
+        await update.message.reply_text("❌ ID скина должен быть числом")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
 # -----------------------ЗАПУСК-БОТА------------------------- #
 
 def main():
@@ -570,5 +619,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
