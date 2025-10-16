@@ -23,8 +23,22 @@ def run_web_server():
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('bot_errors.log')  # Логи в файл
+    ]
+)
+
+# Создаем логгер
 logger = logging.getLogger(__name__)
+
+# Отключаем логи для некоторых noisy модулей
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
 
 db = Database()
 
@@ -238,6 +252,34 @@ async def skin_info_command(update, context):
     except Exception as e:
         logger.error(f"Ошибка при показе информации о скине: {e}")
         await update.message.reply_text("❌ Ошибка при загрузке информации")
+
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ошибки бота"""
+    try:
+        # Логируем ошибку
+        logger.error("Exception while handling an update:", exc_info=context.error)
+        
+        # Детальная информация об ошибке
+        error_details = {
+            "error": str(context.error),
+            "update": update.to_dict() if update else None,
+            "user_data": context.user_data,
+            "chat_data": context.chat_data
+        }
+        
+        logger.error(f"Error details: {error_details}")
+        
+        # Уведомление пользователю
+        if update and update.effective_message:
+            try:
+                await update.effective_message.reply_text(
+                    "❌ Произошла ошибка. Мы уже работаем над исправлением!"
+                )
+            except:
+                pass  # Игнорируем ошибки отправки сообщений
+                
+    except Exception as e:
+        logger.error(f"Error in error handler: {e}")
 
 # -----------------------АДМИН-ОБРАБОТЧИКИ------------------------- #
 
@@ -494,6 +536,9 @@ def main():
     # Добавляем обработчик текстовых сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+    # Обработчик ошибок
+    application.add_error_handler(error_handler)
+
     web_thread = threading.Thread(target=run_web_server, daemon=True)
     web_thread.start()
 
@@ -504,3 +549,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
