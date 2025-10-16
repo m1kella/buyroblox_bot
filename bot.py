@@ -1,3 +1,4 @@
+import telegram
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
@@ -497,47 +498,60 @@ async def my_id(update, context):
 # -----------------------ЗАПУСК-БОТА------------------------- #
 
 def main():
-
     """Основная функция запуска бота"""
+    try:
+        # Создаем приложение
+        application = (
+            Application.builder()
+            .token(Config.BOT_TOKEN)
+            .concurrent_updates(True)
+            .build()
+        )
+        
+        # Добавляем обработчики команд
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help_command))
+        application.add_handler(CommandHandler("balance", balance_command))
+        application.add_handler(CommandHandler("catalog", show_catalog))
+        application.add_handler(CommandHandler("inventory", inventory_command))
+        application.add_handler(CommandHandler("admin", admin_panel))
+        application.add_handler(CommandHandler("myid", my_id))
+        application.add_handler(CommandHandler("photo", photo_command))
+        application.add_handler(CommandHandler("skin", skin_info_command))
+        application.add_handler(CommandHandler("delete_skin", delete_skin_command))
 
-    # Создаем приложение
-    application = (
-        Application.builder()
-        .token(Config.BOT_TOKEN)
-        .concurrent_updates(True)  # Добавь эту строку
-        .build()
-    )
+        # ⭐⭐ Важно: сначала админ хендлеры, потом обычные ⭐⭐
+        application.add_handler(CallbackQueryHandler(admin_button_handler, pattern="^admin_"))
+        application.add_handler(CallbackQueryHandler(button_handler))
 
-    # Добавляем обработчики команд
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("balance", balance_command))
-    application.add_handler(CommandHandler("catalog", show_catalog))
-    application.add_handler(CommandHandler("inventory", inventory_command))
-    application.add_handler(CommandHandler("admin", admin_panel))
-    application.add_handler(CommandHandler("myid", my_id))
-    application.add_handler(CommandHandler("photo", photo_command))
-    application.add_handler(CommandHandler("skin", skin_info_command))
+        # Добавляем обработчик текстовых сообщений
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # ⭐⭐ Добавляем обработчик кнопок ПОСЛЕ команд ⭐⭐
-    application.add_handler(CallbackQueryHandler(admin_button_handler, pattern="^admin_"))
-    application.add_handler(CallbackQueryHandler(button_handler))
+        # Добавляем обработчик ошибок
+        application.add_error_handler(error_handler)
 
-    # Добавляем обработчик текстовых сообщений
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Обработчик ошибок
-    application.add_error_handler(error_handler)
-
-    web_thread = threading.Thread(target=run_web_server, daemon=True)
-    web_thread.start()
-
-    # Запускаем бота
-    print("🌐 Web server started on port 5000")
-    print("🤖 Starting Telegram bot...")
-    application.run_polling()
+        print("🤖 Starting bot with conflict protection...")
+        
+        # Запускаем с защитой от конфликтов
+        application.run_polling(
+            drop_pending_updates=True,  # Игнорируем старые сообщения
+            allowed_updates=['message', 'callback_query'],
+            close_loop=False
+        )
+        
+    except telegram.error.Conflict:
+        print("❌ Conflict detected! Another bot instance is running.")
+        print("🔄 Waiting 30 seconds and restarting...")
+        import time
+        time.sleep(30)
+        main()  # Перезапускаем
+        
+    except Exception as e:
+        print(f"❌ Bot crashed: {e}")
+        print("🔄 Restarting in 10 seconds...")
+        import time
+        time.sleep(10)
+        main()  # Перезапускаем
 
 if __name__ == "__main__":
     main()
-
-
